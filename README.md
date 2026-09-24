@@ -1,66 +1,79 @@
-# Flashcard Generator
+Flashcard Generator
 
-**Project option:** Study assistant (flashcards + quiz)
+Project option: Study assistant (flashcards + quiz)
 
-**Live demo:** https://study-assistant-sable.vercel.app/
+Live demo: https://study-assistant-sable.vercel.app/
 
-Paste your notes or name a topic, and the app uses Google Gemini to turn it into a deck of 6–10 flashcards, each tagged easy, medium or hard. You can flip through the cards, quiz yourself, retest only the cards you got wrong, and regenerate any single card you don't like.
+This was my submission for FLAM's Frontend Internship assignment. I picked the Study Assistant option: paste in your notes or just name a topic, and the app asks Google Gemini to turn it into a deck of 6–10 flashcards, each tagged easy, medium, or hard. From there you can flip through them, run a quiz on yourself, retest just the ones you got wrong, and regenerate any single card if you don't like how it came out.
 
-## Setup
 
-Requires Node.js 20+ and a [Gemini API key](https://aistudio.google.com/apikey).
+How I approached it
 
-```bash
-git clone <your-repo-url-here>
+I started by designing the JSON shape I wanted back from the model before writing a single line of UI code — an array of cards with id, question, answer, and difficulty. Everything downstream, from the prompt to the validation logic to the component props, was built around that one shape staying fixed.
+
+The app is a single Next.js project so the frontend and backend deploy together with no CORS setup: a serverless API route holds my Gemini key and is the only code that ever talks to the model. The frontend never sees the key and never calls Gemini directly.
+
+Along the way I hit a real snag that ended up being a good lesson: my first model choice (gemini-2.5-flash, then gemini-2.0-flash) had been retired since I picked it, and the replacement (gemini-3.6-flash) was temporarily overloaded when I tested it. I ended up on gemini-3.5-flash-lite, which worked reliably — a small reminder that "pick any model, it doesn't affect your score" doesn't mean the model won't occasionally get in your way.
+
+
+Setup:
+
+Requires Node.js 20+ and a Gemini API key.
+
+bash
+git clone https://github.com/sanjay-tech-io/Study-Assistant
 cd flam-project
 npm install
-```
 
-Create `.env.local` in the project root, using `.env.example` as the template:
+Create .env.local in the project root, using .env.example as a template:
 
-```
-GEMINI_API_KEY=your-key-here
-```
+GEMINI_API_KEY=generated_api_key
 
-Then start the dev server and open http://localhost:3000:
+Then run:
 
-```bash
+bash
 npm run dev
-```
 
-## Usage
+and open http://localhost:3000.
 
-1. **Generate:** paste notes or type a topic into the text box and click **Generate flashcards**.
-2. **Browse:** click a card to flip between its question and answer.
-3. **Regenerate:** click **Regenerate** on a card to replace just that card with a new one at the same difficulty.
-4. **Quiz:** click **Start Quiz** to go through the cards one at a time in shuffled order. Reveal each answer, then mark it **Got it right** or **Got it wrong**.
-5. **Retest:** the results screen shows your score. **Retest wrong answers** runs a new pass with only the cards you missed. **Back to cards** returns to browsing at any time.
 
-## Architecture
+Usage
 
-The app is split into three layers:
+1. Generate — paste your notes or type a topic, click Generate flashcards.
+2. Browse — click a card to flip between question and answer.
+3. Regenerate — not happy with a card? Click Regenerate to swap it for a new one at the same difficulty, without touching the rest of the deck.
+4. Quiz — click Start Quiz to go through the deck in shuffled order. Reveal each answer, then mark Got it right or Got it wrong.
+5. Retest — the results screen shows your score, with a Retest wrong answers option that runs a fresh pass on just the ones you missed. Back to cards takes you out of the quiz at any point.
 
-- **API route** ([app/api/generate/route.ts](app/api/generate/route.ts)): the only code that talks to Gemini and the only place the API key is used. It returns Gemini's output as an unparsed string (`{ raw }`), or `{ error: "REQUEST_FAILED" }` on any failure.
-- **`lib/`**: [lib/api.ts](lib/api.ts) calls our own route, with a 20-second timeout. [lib/validateResult.ts](lib/validateResult.ts) parses the raw string and checks it against the card types in [types/result.ts](types/result.ts).
-- **`components/`**: the UI. It only ever receives cards that have already passed validation.
 
-Validation is kept separate from rendering so that every way the LLM output can go wrong (malformed JSON, wrong shape, empty deck) becomes a named error code in one place. The page maps those codes to readable messages, so components never have to handle half-valid data.
+Architecture
 
-## AI usage
+I split the app into three layers on purpose, rather than letting the API call, the validation, and the rendering blur together:
 
-Claude (via Claude Code in VS Code) implemented this project from detailed specifications I reviewed and iterated on at each step, and I understood and could explain every file before moving to the next one. I tested all five failure modes myself — four via curl against the API route (invalid model, empty result, malformed JSON, wrong shape) and the timeout via the browser with the DevTools Network tab open, confirming the client aborts at 20 seconds. I manually verified the full user flow, including card regeneration with concurrent requests, on both desktop and a 375px mobile viewport.
+1. API route (app/api/generate/route.ts) — the only code that talks to Gemini, and the only place the API key is used. It returns Gemini's raw text as { raw }, or { error: "REQUEST_FAILED" } on any failure, without ever leaking Gemini's internal error details to the browser.
+2. lib/ — lib/api.ts calls my own route (never Gemini directly) with a 20-second client-side timeout. lib/validateResult.ts parses that raw string and checks it against the shape defined in types/result.ts, throwing a specific error code for each way it can go wrong.
+3. components/ — the UI. Every component only ever receives cards that have already passed validation; nothing renders unchecked model output.
 
-## Known limitations
+Keeping validation separate from rendering meant that every failure mode — malformed JSON, wrong shape, an empty deck — became one named error code in one file, instead of scattered try/catch guesses across the UI. page.tsx maps those codes to plain-language messages, so no component ever has to reason about what could be wrong with the data it's holding.
 
-- **Regenerate has little context.** It only sends the clicked card's question, not the original notes, so a regenerated card may repeat another card's content.
-- **No persistence or accounts.** Refreshing the page loses the deck, and there is no auth or saved history.
-- **No rate limiting.** Anyone who can reach `/api/generate` can spend the Gemini quota.
-- **Timeouts don't stop the server.** The 20-second timeout only cancels the browser's request; the server still waits for Gemini to finish.
-- **One error message for all server failures.** The route returns `REQUEST_FAILED` for every error, so the UI shows the same message whether the input was invalid, the key is missing, or Gemini failed. Details only appear in the server logs.
-- **Duplicate card ids aren't rejected.** If Gemini returns two cards with the same `id`, they flip together in browse mode.
-- **Running quizzes don't update.** A quiz already in progress keeps the cards it started with; regenerated cards appear from the next quiz.
-- **No automated tests.** Verification was type-checking, linting, and manual or curl testing only.
 
-## Time spent
+AI usage
 
-[X] hours
+I built this with Claude Code (in VS Code) doing the actual typing, working from detailed specs I wrote and reviewed at every step — I didn't move to the next file until I understood the one before it. I personally tested all five required failure modes: four through curl directly against the API route (an invalid model name, an empty card list, malformed JSON, and a wrong-shape response), and the timeout by watching the DevTools Network tab in the browser, where I confirmed the request actually gets cancelled at 20 seconds. I also manually walked through the full flow — including firing off two card regenerations back to back to check they don't interfere with each other — on both a normal desktop window and a 375px mobile view.
+
+
+Known limitations
+
+1. Regenerate has limited context. It only sends the clicked card's question back to the model, not my original notes, so a regenerated card can occasionally repeat something another card already covers.
+2. No persistence or accounts. Refresh the page and the deck is gone — there's no save/reload or auth, since the assignment didn't call for either.
+3. No rate limiting. Anyone who can reach /api/generate can spend my Gemini quota.
+The server doesn't stop when the client times out. My 20-second timeout only cancels the browser's request; Gemini's call keeps running server-side until it finishes.
+4. One error message for every server-side failure. The route always returns REQUEST_FAILED, so the UI can't distinguish "bad input" from "missing key" from "Gemini failed" — the specifics only show up in the server logs.
+5. Duplicate card IDs aren't rejected. If Gemini ever returns two cards sharing an id, they'd flip together in browse mode.
+6. A running quiz doesn't pick up a regenerated card. The quiz keeps the deck it started with; a regenerated card only shows up the next time you start a new quiz.
+7. No automated tests. I relied on tsc, eslint, and hands-on testing (curl + browser) rather than a test suite, given the time budget.
+
+
+Time spent
+
+3 hours
