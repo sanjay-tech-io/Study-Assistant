@@ -2,6 +2,8 @@
 
 **Project option:** Study assistant (flashcards + quiz)
 
+**Live demo:** https://study-assistant-sable.vercel.app/
+
 Paste your notes or name a topic, and the app uses Google Gemini to turn it into a deck of 6–10 flashcards, each tagged easy, medium or hard. You can flip through the cards, quiz yourself, retest only the cards you got wrong, and regenerate any single card you don't like.
 
 ## Setup

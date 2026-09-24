@@ -57,10 +57,41 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-12">
-      <h1 className="text-2xl font-semibold">Flashcard Generator</h1>
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-10 font-sans sm:py-16">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl dark:text-zinc-50">
+          Flashcard Generator
+        </h1>
+        <p className="text-base text-zinc-600 dark:text-zinc-400">
+          Turn your notes into flashcards, then quiz yourself.
+        </p>
+      </header>
 
       <PromptInput onSubmit={handlePromptSubmit} disabled={status === "loading"} />
+
+      {status === "idle" && (
+        <div className="flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-zinc-200 px-6 py-12 text-center dark:border-zinc-800">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-10 w-10 text-zinc-300 dark:text-zinc-700"
+          >
+            <rect x="3" y="7" width="14" height="12" rx="2" />
+            <path d="M7 7V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-2" />
+          </svg>
+          <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+            Your flashcards will appear here
+          </p>
+          <p className="max-w-sm text-sm text-zinc-500">
+            Generate a deck above, then flip through the cards or quiz yourself.
+          </p>
+        </div>
+      )}
 
       {status === "loading" && <LoadingState />}
 
